@@ -7,11 +7,14 @@ A custom node for ComfyUI that allows you to interact with OpenRouter's chat/com
 ## Features
 
 - Access to all models available on OpenRouter
-- Support for image inputs (multimodal models)
+- Support for multiple image inputs (up to 10 images)
+- Dynamic image input visibility - additional inputs appear as you connect images
+- PDF support with multiple OCR engine options
 - Web search capability with `:online` modifier
 - Cheapest provider routing with `:floor` modifier
 - Fastest provider routing with `:nitro` modifier
 - Detailed statistics on token usage and generation speed
+- Real-time OpenRouter account balance display
 
 ## Installation
 
@@ -47,7 +50,9 @@ The OpenRouter node provides a simple interface to interact with various LLMs th
 
 #### Optional Inputs:
 
-- **image**: An image input for multimodal models that support image understanding.
+- **image_1** through **image_10**: Multiple image inputs for multimodal models. The first image input (image_1) is always visible. Additional image inputs automatically appear as you connect images (up to 10 total).
+- **pdf_data**: PDF document input for models that support document understanding.
+- **pdf_engine**: Choose between "auto", "mistral-ocr", or "pdf-text" for PDF processing.
 - **user_message_input**: Alternative input for the user message, useful for connecting to other nodes.
 
 ### Outputs:
@@ -72,12 +77,24 @@ Note: To display the output text in ComfyUI, you can use the ShowText nodes from
 ### Image Understanding
 
 1. Add the OpenRouter node to your workflow
-2. Connect an image output from another node to the "image" input
+2. Connect an image output from another node to the "image_1" input
 3. Enter your API key
 4. Set a system prompt (e.g., "You are a helpful assistant.")
 5. Enter a user message (e.g., "Describe this image in detail.")
 6. Select a multimodal model (e.g., "openai/gpt-4-vision" or "anthropic/claude-3-opus-20240229")
 7. Run the workflow
+
+### Multiple Image Analysis
+
+1. Connect your first image to "image_1"
+2. As soon as you connect it, "image_2" will automatically appear
+3. Connect additional images as needed (up to 6 total)
+4. Unused image inputs will automatically hide when disconnected
+5. Enter a prompt that references multiple images (e.g., "Compare these images and describe the differences.")
+6. Select a multimodal model that supports multiple images
+7. Run the workflow
+
+**Note**: The user is responsible for checking if their selected model supports multiple images. Most modern multimodal models (GPT-4V, Claude 3, etc.) support multiple images in a single request.
 
 ### Routing Options
 

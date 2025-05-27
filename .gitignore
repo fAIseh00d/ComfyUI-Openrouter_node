@@ -37,6 +37,7 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+*.Zone.Identifier
 
 # Secrets
 api_keys.json

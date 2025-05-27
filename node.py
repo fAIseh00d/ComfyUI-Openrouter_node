@@ -66,7 +66,6 @@ class OpenRouterNode:
                  "pdf_engine": (["auto", "mistral-ocr", "pdf-text"], {"default": "auto"}),
             },
             "optional": {
-                "image": ("IMAGE",),
                 "pdf_data": (PDF_DATA_TYPE,), # Use '*' and check structure in generate_response
                 "user_message_input": ("STRING", {"forceInput": True}),
             }
@@ -154,7 +153,7 @@ class OpenRouterNode:
 
     def generate_response(self, api_key, system_prompt, user_message_box, model,
                          web_search, cheapest, fastest, temperature, pdf_engine,
-                         image=None, pdf_data=None, user_message_input=None):
+                         pdf_data=None, user_message_input=None, **kwargs):
         """
         Sends a completion request to the OpenRouter chat completion endpoint.
         Handles text, optional image, and optional PDF inputs.
@@ -195,20 +194,24 @@ class OpenRouterNode:
             "text": user_text
         })
 
-        # 2. Add Image part (optional)
-        if image is not None:
-            try:
-                img_str = self.image_to_base64(image)
-                user_content_blocks.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{img_str}"
-                    }
-                })
-            except Exception as e:
-                print(f"Error processing image: {e}")
-                # Optionally return an error or just skip the image
-                return (f"Error processing image: {e}", "Stats N/A", "Credits N/A")
+        # 2. Add Image parts (optional) - support multiple images from kwargs
+        # Process all image_N inputs from kwargs
+        image_keys = sorted([k for k in kwargs.keys() if k.startswith('image_')], 
+                           key=lambda x: int(x.split('_')[1]))
+        
+        for image_key in image_keys:
+            if kwargs[image_key] is not None:
+                try:
+                    img_str = self.image_to_base64(kwargs[image_key])
+                    user_content_blocks.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{img_str}"
+                        }
+                    })
+                except Exception as e:
+                    print(f"Error processing {image_key}: {e}")
+                    return (f"Error processing {image_key}: {e}", "Stats N/A", "Credits N/A")
 
         # 3. Add PDF part (optional)
         pdf_filename = "document.pdf" # Default filename if not provided
@@ -447,22 +450,29 @@ class OpenRouterNode:
     @classmethod
     def IS_CHANGED(cls, api_key, system_prompt, user_message_box, model,
                    web_search, cheapest, fastest, temperature, pdf_engine,
-                   image=None, pdf_data=None, user_message_input=None):
+                   pdf_data=None, user_message_input=None, **kwargs):
         """
         Check if any input that affects the output has changed.
         Includes hashing image and PDF data.
         """
-        # Hash image data if present
-        image_hash = None
-        if image is not None and isinstance(image, torch.Tensor):
-            try:
-                # Use a stable hashing method for the tensor's data
-                hasher = hashlib.sha256()
-                hasher.update(image.cpu().numpy().tobytes())
-                image_hash = hasher.hexdigest()
-            except Exception as e:
-                 print(f"Warning: Could not hash image data for IS_CHANGED: {e}")
-                 image_hash = "image_hashing_error" # Use a placeholder on error
+        # Hash image data if present - handle multiple images from kwargs
+        image_hashes = []
+        image_keys = sorted([k for k in kwargs.keys() if k.startswith('image_')], 
+                           key=lambda x: int(x.split('_')[1]))
+        
+        for image_key in image_keys:
+            if kwargs[image_key] is not None:
+                image = kwargs[image_key]
+                if isinstance(image, torch.Tensor):
+                    try:
+                        hasher = hashlib.sha256()
+                        hasher.update(image.cpu().numpy().tobytes())
+                        image_hashes.append(hasher.hexdigest())
+                    except Exception as e:
+                        print(f"Warning: Could not hash {image_key} data for IS_CHANGED: {e}")
+                        image_hashes.append(f"{image_key}_hashing_error")
+                else:
+                    image_hashes.append(None)
 
 
         # Hash PDF data if present and valid
@@ -494,7 +504,7 @@ class OpenRouterNode:
         # Use primitive types where possible for reliable hashing/comparison
         return (api_key, system_prompt, user_message_box, model,
                 web_search, cheapest, fastest, temp_float, pdf_engine,
-                image_hash, pdf_hash, user_message_input)
+                tuple(image_hashes), pdf_hash, user_message_input)
 
 # Node class mappings
 NODE_CLASS_MAPPINGS = {
@@ -503,5 +513,5 @@ NODE_CLASS_MAPPINGS = {
 
 # Node display name mappings
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "OpenRouterNode": "OpenRouter LLM Node (Text/Image/PDF)" # Updated name
+    "OpenRouterNode": "OpenRouter LLM Node (Text/Multi-Image/PDF)" # Updated name
 }
