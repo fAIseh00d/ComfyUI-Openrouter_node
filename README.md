@@ -94,7 +94,7 @@ Note: To display the output text in ComfyUI, you can use the ShowText nodes from
 6. Select a multimodal model that supports multiple images
 7. Run the workflow
 
-**Note**: The user is responsible for checking if their selected model supports multiple images. Most modern multimodal models (GPT-4V, Claude 3, etc.) support multiple images in a single request.
+**Note**: The user is responsible for checking if their selected model supports multiple images. Most modern multimodal models (4o, Gemini Flash, etc.) support multiple images in a single request.
 
 ### Routing Options
 
