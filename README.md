@@ -4,6 +4,9 @@ A custom node for ComfyUI that allows you to interact with OpenRouter's chat/com
 
 ![OpenRouter Node Example](https://github.com/gabe-init/ComfyUI-Openrouter_node/blob/main/openrouter_node_example.png?raw=true)
 
+Thanks **@wTechArtist** for the idea!
+![Multiple Images Example](https://github.com/user-attachments/assets/09f2478c-c4f8-46f0-b79e-e4766f020119)
+
 ## Features
 
 - Access to all models available on OpenRouter
