@@ -10,6 +10,6 @@ Repository = "https://github.com/gabe-init/ComfyUI-Openrouter_node"
 #  Used by Comfy Registry https://comfyregistry.org
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "gabe-init"
 DisplayName = "ComfyUI-Openrouter_node"
 Icon = ""
