@@ -7,6 +7,11 @@ A custom node for ComfyUI that allows you to interact with OpenRouter's chat/com
 Multiple image inputs are supported. Make sure the model you are using supports multiple images to be sent at once. Thanks **@wTechArtist** for the idea!
 ![Multiple Images Example](https://github.com/user-attachments/assets/09f2478c-c4f8-46f0-b79e-e4766f020119)
 
+## Updates
+
+### 6/12/2025 - Chat Mode
+Added a new Chat Mode feature that lets you have actual conversations with LLMs! When you enable chat mode, the node remembers your conversation history and maintains context between messages. Your chats are automatically saved in timestamped folders, so you can pick up where you left off if you come back within an hour. After that, it'll start a fresh conversation. Each chat session is stored as a JSON file with a friendly name based on your first message. There's even a handy utility script to view, export, or clean up old conversations. Just toggle "chat_mode" to True and start chatting!
+
 ## Features
 
 - Access to all models available on OpenRouter
@@ -18,6 +23,7 @@ Multiple image inputs are supported. Make sure the model you are using supports 
 - Fastest provider routing with `:nitro` modifier
 - Detailed statistics on token usage and generation speed
 - Real-time OpenRouter account balance display
+- **NEW: Chat Mode** - Maintain conversation context across multiple messages with automatic session management
 
 ## Installation
 
@@ -50,6 +56,7 @@ The OpenRouter node provides a simple interface to interact with various LLMs th
 - **cheapest**: Route to the cheapest provider by appending `:floor` to the model ID (enabled by default).
 - **fastest**: Route to the fastest provider by appending `:nitro` to the model ID (disabled by default).
 - **temperature**: Controls the randomness of the model's output (0.0 to 2.0).
+- **chat_mode**: Enable conversation mode to maintain context across messages (disabled by default).
 
 #### Optional Inputs:
 
@@ -98,6 +105,51 @@ Note: To display the output text in ComfyUI, you can use the ShowText nodes from
 7. Run the workflow
 
 **Note**: The user is responsible for checking if their selected model supports multiple images. Most modern multimodal models (4o, Gemini Flash, etc.) support multiple images in a single request.
+
+### Chat Mode
+
+The Chat Mode feature allows you to maintain conversation context across multiple messages, enabling more natural and coherent conversations with the LLM.
+
+#### How Chat Mode Works:
+
+1. **Enable Chat Mode**: Toggle the "chat_mode" option to True
+2. **Automatic Session Management**: 
+   - Sessions are automatically created when you start a conversation
+   - If you send another message within 1 hour, it continues the same session
+   - After 1 hour of inactivity, a new session is created
+3. **Session Storage**:
+   - Conversations are stored in a `chats` folder within the node directory
+   - Each session is saved with a timestamp and the first 5 words of your initial message
+   - Format: `session_YYYYMMDD_HHMMSS_first_five_words`
+4. **Context Preservation**: The entire conversation history is sent with each request, allowing the model to maintain context
+
+#### Chat Mode Example:
+
+1. Enable chat_mode in the node
+2. First message: "Hello, my name is Alice"
+3. Response: "Hello Alice! Nice to meet you. How can I help you today?"
+4. Second message: "What's my name?"
+5. Response: "Your name is Alice, as you mentioned earlier."
+
+The conversation history is automatically managed and persisted between runs.
+
+#### Managing Chat Sessions:
+
+A utility script `manage_chats.py` is included to help you manage your chat sessions:
+
+```bash
+# List all chat sessions
+python manage_chats.py list
+
+# View a specific session
+python manage_chats.py view session_20241206_143022_hello_how_are_you_today
+
+# Export a session to different formats (json, txt, md)
+python manage_chats.py export session_20241206_143022_hello_how_are_you_today -f md -o my_chat.md
+
+# Clean up sessions older than 30 days
+python manage_chats.py clean -d 30
+```
 
 ### Routing Options
 

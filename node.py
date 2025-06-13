@@ -8,6 +8,7 @@ import torch
 import tiktoken
 from PIL import Image
 import hashlib # Added for hashing PDF bytes in IS_CHANGED
+from .chat_manager import ChatSessionManager
 
 # Define a placeholder type name for PDF data.
 # The actual input connection will accept '*' but we check the structure.
@@ -29,7 +30,7 @@ class OpenRouterNode:
     cache_duration = 3600  # Cache duration in seconds (1 hour)
 
     def __init__(self):
-        pass
+        self.chat_manager = ChatSessionManager()
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -64,6 +65,7 @@ class OpenRouterNode:
                     "round": 1,
                 }),
                  "pdf_engine": (["auto", "mistral-ocr", "pdf-text"], {"default": "auto"}),
+                "chat_mode": ("BOOLEAN", {"default": False}),
             },
             "optional": {
                 "pdf_data": (PDF_DATA_TYPE,), # Use '*' and check structure in generate_response
@@ -152,7 +154,7 @@ class OpenRouterNode:
              return "Error fetching credits: Could not decode JSON response."
 
     def generate_response(self, api_key, system_prompt, user_message_box, model,
-                         web_search, cheapest, fastest, temperature, pdf_engine,
+                         web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
                          pdf_data=None, user_message_input=None, **kwargs):
         """
         Sends a completion request to the OpenRouter chat completion endpoint.
@@ -177,13 +179,26 @@ class OpenRouterNode:
         # Validate and convert temperature
         validated_temp = self.validate_temperature(temperature)
 
-        # Build the messages array, starting with a system prompt.
-        messages = [
-            {"role": "system", "content": system_prompt},
-        ]
-
         # Decide whether to use user_message_input or user_message_box
         user_text = user_message_input if user_message_input is not None and user_message_input.strip() else user_message_box
+
+        # Initialize session_path
+        session_path = None
+        
+        # Handle chat mode
+        if chat_mode:
+            # Get or create a chat session
+            session_path, messages = self.chat_manager.get_or_create_session(user_text, system_prompt)
+            
+            # Check if we need to update the system prompt (for existing sessions)
+            if messages and messages[0]["role"] == "system" and messages[0]["content"] != system_prompt:
+                # Update system prompt if it has changed
+                messages[0]["content"] = system_prompt
+        else:
+            # Non-chat mode: Build the messages array, starting with a system prompt.
+            messages = [
+                {"role": "system", "content": system_prompt},
+            ]
 
         # --- Build the user message content ---
         user_content_blocks = []
@@ -247,10 +262,17 @@ class OpenRouterNode:
         # OpenRouter docs specifically show the array format when using 'file' type.
         # Even if only text is present, using the array format like [{"type": "text", "text": user_text}]
         # is generally compatible with newer multimodal models.
-        messages.append({
+        new_user_message = {
             "role": "user",
             "content": user_content_blocks
-        })
+        }
+        
+        if chat_mode:
+            # In chat mode, append to existing conversation (but don't save yet - wait for response)
+            messages.append(new_user_message)
+        else:
+            # In non-chat mode, messages array already has system prompt, just append user message
+            messages.append(new_user_message)
 
         # --- Apply model modifiers ---
         modified_model = model
@@ -349,6 +371,18 @@ class OpenRouterNode:
 
             # Fetch credits information AFTER the main request
             credits_text = self.fetch_credits(api_key)
+
+            # Save conversation in chat mode
+            if chat_mode and session_path:
+                # Append assistant's response to the conversation
+                assistant_message = {
+                    "role": "assistant",
+                    "content": text_output
+                }
+                messages.append(assistant_message)
+                
+                # Save the updated conversation
+                self.chat_manager.save_conversation(session_path, messages)
 
             return (text_output, stats_text, credits_text)
 
@@ -449,7 +483,7 @@ class OpenRouterNode:
 
     @classmethod
     def IS_CHANGED(cls, api_key, system_prompt, user_message_box, model,
-                   web_search, cheapest, fastest, temperature, pdf_engine,
+                   web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
                    pdf_data=None, user_message_input=None, **kwargs):
         """
         Check if any input that affects the output has changed.
@@ -503,7 +537,7 @@ class OpenRouterNode:
         # Combine all relevant inputs into a tuple for comparison
         # Use primitive types where possible for reliable hashing/comparison
         return (api_key, system_prompt, user_message_box, model,
-                web_search, cheapest, fastest, temp_float, pdf_engine,
+                web_search, cheapest, fastest, temp_float, pdf_engine, chat_mode,
                 tuple(image_hashes), pdf_hash, user_message_input)
 
 # Node class mappings
@@ -513,5 +547,5 @@ NODE_CLASS_MAPPINGS = {
 
 # Node display name mappings
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "OpenRouterNode": "OpenRouter LLM Node (Text/Multi-Image/PDF)" # Updated name
+    "OpenRouterNode": "OpenRouter LLM Node (Text/Multi-Image/PDF/Chat)" # Updated name
 }
