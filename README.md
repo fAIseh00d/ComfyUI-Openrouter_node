@@ -10,7 +10,7 @@ Multiple image inputs are supported. Make sure the model you are using supports 
 ## Updates
 
 ### 6/12/2025 - Chat Mode
-Added a new Chat Mode feature that lets you have actual conversations with LLMs! When you enable chat mode, the node remembers your conversation history and maintains context between messages. Your chats are automatically saved in timestamped folders, so you can pick up where you left off if you come back within an hour. After that, it'll start a fresh conversation. Each chat session is stored as a JSON file with a friendly name based on your first message. There's even a handy utility script to view, export, or clean up old conversations. Just toggle "chat_mode" to True and start chatting!
+Added a new Chat Mode feature that lets you store context to enable conversations with LLMs. When you enable chat mode, the node remembers your conversation history and maintains context between messages. Your chats are automatically saved in timestamped folders, so you can pick up where you left off if you come back within an hour. After that, it'll start a fresh conversation. Each chat session is stored as a JSON file with a friendly name based on your first message. Just toggle "chat_mode" 
 
 ## Features
 
