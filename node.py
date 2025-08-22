@@ -62,7 +62,7 @@ class OpenRouterNode:
                     "max": 2.0,
                     "step": 0.1,
                     "display": "slider",
-                    "round": 1,
+                    "round": 0.1,
                 }),
                  "pdf_engine": (["auto", "mistral-ocr", "pdf-text"], {"default": "auto"}),
                 "chat_mode": ("BOOLEAN", {"default": False}),
@@ -70,6 +70,10 @@ class OpenRouterNode:
             "optional": {
                 "pdf_data": (PDF_DATA_TYPE,), # Use '*' and check structure in generate_response
                 "user_message_input": ("STRING", {"forceInput": True}),
+                "max_tokens": ("INT", {"default": 0, "min": 0, "max": 1000000, "step": 1}),
+                "top_p": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "reasoning": ("BOOLEAN", {"default": False}),
+                "structured_output": ("STRING", {"forceInput": True}),
             }
         }
 
@@ -155,7 +159,8 @@ class OpenRouterNode:
 
     def generate_response(self, api_key, system_prompt, user_message_box, model,
                          web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
-                         pdf_data=None, user_message_input=None, **kwargs):
+                         pdf_data=None, user_message_input=None, 
+                         max_tokens=0, top_p=1.0, reasoning=False, structured_output=None, **kwargs):
         """
         Sends a completion request to the OpenRouter chat completion endpoint.
         Handles text, optional image, and optional PDF inputs.
@@ -296,6 +301,40 @@ class OpenRouterNode:
             "temperature": validated_temp
             # Omitting max_tokens lets the model decide (usually preferred)
         }
+        
+        data["skip_special_tokens"] = True # Added to avoid unwanted special tokens (doesn't work reliably)
+        
+        if max_tokens > 0:
+            data["max_tokens"] = max_tokens
+        
+        if top_p < 1.0:
+            data["top_p"] = top_p
+        
+        if reasoning:
+            data.update({
+                "reasoning": {
+                    "enabled": True,
+                    "exclude": True
+                }
+            })
+        else:
+            data.update({
+                "reasoning": {
+                    "enabled": False,
+                    "exclude": True
+                }
+            })
+            
+        if structured_output is not None and model.startswith("openai/"):
+            data["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "structured_output",
+                        "strict": True,
+                        "schema": json.loads(structured_output)
+                }
+            }
+
 
         # Add plugins if a specific PDF engine is selected
         if pdf_engine != "auto":
@@ -484,7 +523,8 @@ class OpenRouterNode:
     @classmethod
     def IS_CHANGED(cls, api_key, system_prompt, user_message_box, model,
                    web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
-                   pdf_data=None, user_message_input=None, **kwargs):
+                   pdf_data=None, user_message_input=None,
+                   max_tokens=0, top_p=1.0, reasoning=False, structured_output=None, **kwargs):
         """
         Check if any input that affects the output has changed.
         Includes hashing image and PDF data.
@@ -538,7 +578,8 @@ class OpenRouterNode:
         # Use primitive types where possible for reliable hashing/comparison
         return (api_key, system_prompt, user_message_box, model,
                 web_search, cheapest, fastest, temp_float, pdf_engine, chat_mode,
-                tuple(image_hashes), pdf_hash, user_message_input)
+                tuple(image_hashes), pdf_hash, user_message_input,
+                max_tokens, top_p, reasoning, structured_output)
 
 # Node class mappings
 NODE_CLASS_MAPPINGS = {
