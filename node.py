@@ -15,6 +15,21 @@ from .chat_manager import ChatSessionManager
 # Expecting a dictionary: {"filename": str, "bytes": bytes}
 PDF_DATA_TYPE = "*" # Use '*' to accept any type, check structure later
 
+# Supported aspect ratios for Gemini-derived image generation (per OpenRouter docs)
+IMAGE_ASPECT_RATIO_CHOICES = [
+    "auto",  # rely on model default / inferred from reference
+    "21:9",
+    "16:9",
+    "4:3",
+    "3:2",
+    "1:1",
+    "2:3",
+    "3:4",
+    "9:16",
+    "5:4",
+    "4:5",
+]
+
 class OpenRouterNode:
     """
     A node for interacting with OpenRouter's chat/completion API.
@@ -75,6 +90,7 @@ class OpenRouterNode:
                 "top_p": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "reasoning": ("BOOLEAN", {"default": False}),
                 "structured_output": ("STRING", {"forceInput": True}),
+                "image_aspect_ratio": (IMAGE_ASPECT_RATIO_CHOICES, {"default": "auto"}),
             }
         }
 
@@ -160,7 +176,8 @@ class OpenRouterNode:
 
     def generate_response(self, api_key, system_prompt, user_message_box, model,
                          web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
-                         image_generation=False, pdf_data=None, user_message_input=None, 
+                         image_generation=False, image_aspect_ratio="auto",
+                         pdf_data=None, user_message_input=None, 
                          max_tokens=0, top_p=1.0, reasoning=False, structured_output=None, **kwargs):
         """
         Sends a completion request to the OpenRouter chat completion endpoint.
@@ -320,6 +337,15 @@ class OpenRouterNode:
         if image_generation:
             data["modalities"] = ["image", "text"]
             print(f"Image generation enabled by user setting")
+            
+            image_config = {}
+            if image_aspect_ratio and image_aspect_ratio != "auto":
+                if image_aspect_ratio in IMAGE_ASPECT_RATIO_CHOICES:
+                    image_config["aspect_ratio"] = image_aspect_ratio
+                else:
+                    print(f"Warning: Unsupported image aspect ratio '{image_aspect_ratio}'. Falling back to auto.")
+            if image_config:
+                data["image_config"] = image_config
         
         data["skip_special_tokens"] = True # Added to avoid unwanted special tokens (doesn't work reliably)
         
@@ -612,7 +638,8 @@ class OpenRouterNode:
     @classmethod
     def IS_CHANGED(cls, api_key, system_prompt, user_message_box, model,
                    web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
-                   image_generation=False, pdf_data=None, user_message_input=None,
+                   image_generation=False, image_aspect_ratio="auto",
+                   pdf_data=None, user_message_input=None,
                    max_tokens=0, top_p=1.0, reasoning=False, structured_output=None, **kwargs):
         """
         Check if any input that affects the output has changed.
@@ -667,7 +694,8 @@ class OpenRouterNode:
         # Use primitive types where possible for reliable hashing/comparison
         return (api_key, system_prompt, user_message_box, model,
                 web_search, cheapest, fastest, temp_float, pdf_engine, chat_mode,
-                image_generation, tuple(image_hashes), pdf_hash, user_message_input,
+                image_generation, image_aspect_ratio,
+                tuple(image_hashes), pdf_hash, user_message_input,
                 max_tokens, top_p, reasoning, structured_output)
 
 # Node class mappings
