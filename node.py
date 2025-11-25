@@ -31,6 +31,13 @@ IMAGE_ASPECT_RATIO_CHOICES = [
     "4:5",
 ]
 
+IMAGE_SIZE_CHOICES = [
+    "auto",  # rely on model default
+    "1K",
+    "2K",
+    "4K",
+]
+
 class OpenRouterNode:
     """
     A node for interacting with OpenRouter's chat/completion API.
@@ -92,6 +99,7 @@ class OpenRouterNode:
                 "reasoning": ("BOOLEAN", {"default": False}),
                 "structured_output": ("STRING", {"forceInput": True}),
                 "image_aspect_ratio": (IMAGE_ASPECT_RATIO_CHOICES, {"default": "auto"}),
+                "image_size": (IMAGE_SIZE_CHOICES, {"default": "auto"}),
             }
         }
 
@@ -177,7 +185,7 @@ class OpenRouterNode:
 
     def generate_response(self, api_key, system_prompt, user_message_box, model,
                          web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
-                         image_generation=False, image_aspect_ratio="auto",
+                         image_generation=False, image_aspect_ratio="auto", image_size="auto",
                          pdf_data=None, user_message_input=None, 
                          max_tokens=0, top_p=1.0, reasoning=False, structured_output=None, **kwargs):
         """
@@ -347,11 +355,16 @@ class OpenRouterNode:
             print(f"Image generation enabled by user setting")
             
             image_config = {}
-            if image_aspect_ratio and image_aspect_ratio != "auto":
-                if image_aspect_ratio in IMAGE_ASPECT_RATIO_CHOICES:
-                    image_config["aspect_ratio"] = image_aspect_ratio
-                else:
-                    print(f"Warning: Unsupported image aspect ratio '{image_aspect_ratio}'. Falling back to auto.")
+            if image_aspect_ratio != "auto" and image_aspect_ratio in IMAGE_ASPECT_RATIO_CHOICES:
+                image_config["aspect_ratio"] = image_aspect_ratio
+            elif image_aspect_ratio != "auto":
+                print(f"Warning: Unsupported image aspect ratio '{image_aspect_ratio}'. Falling back to auto.")
+
+            if image_size != "auto" and image_size in IMAGE_SIZE_CHOICES:
+                image_config["image_size"] = image_size
+            elif image_size != "auto":
+                print(f"Warning: Unsupported image size '{image_size}'. Falling back to auto.")
+
             if image_config:
                 data["image_config"] = image_config
         
