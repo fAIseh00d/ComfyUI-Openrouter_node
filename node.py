@@ -8,6 +8,7 @@ import torch
 import tiktoken
 from PIL import Image
 import hashlib # Added for hashing PDF bytes in IS_CHANGED
+from concurrent.futures import ThreadPoolExecutor
 from .chat_manager import ChatSessionManager
 
 # Define a placeholder type name for PDF data.
@@ -236,23 +237,30 @@ class OpenRouterNode:
         })
 
         # 2. Add Image parts (optional) - support multiple images from kwargs
-        # Process all image_N inputs from kwargs
+        # Process all image_N inputs from kwargs, including batched images
         image_keys = sorted([k for k in kwargs.keys() if k.startswith('image_')], 
                            key=lambda x: int(x.split('_')[1]))
         
+        total_images = 0
         for image_key in image_keys:
             if kwargs[image_key] is not None:
                 try:
-                    img_str = self.image_to_base64(kwargs[image_key])
-                    user_content_blocks.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/png;base64,{img_str}"
-                        }
-                    })
+                    # Get list of base64 strings for all images in batch
+                    img_str_list = self.images_to_base64_list(kwargs[image_key])
+                    for img_str in img_str_list:
+                        user_content_blocks.append({
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{img_str}"
+                            }
+                        })
+                        total_images += 1
                 except Exception as e:
                     print(f"Error processing {image_key}: {e}")
                     return (f"Error processing {image_key}: {e}", placeholder_image, "Stats N/A", "Credits N/A")
+        
+        if total_images > 0:
+            print(f"Added {total_images} image(s) to request")
 
         # 3. Add PDF part (optional)
         pdf_filename = "document.pdf" # Default filename if not provided
@@ -530,33 +538,23 @@ class OpenRouterNode:
              return (f"Node Error: {str(e)}", placeholder_image, "Stats N/A due to error", "Credits N/A due to error")
 
     @staticmethod
-    def image_to_base64(image):
+    def _single_image_to_base64(image_hwc):
         """
-        Converts a ComfyUI IMAGE (torch.Tensor, BHWC, float 0-1)
-        into a base64-encoded PNG string.
+        Converts a single HWC image tensor to a base64-encoded PNG string.
         """
-        if not isinstance(image, torch.Tensor):
-            raise TypeError("Input 'image' is not a torch.Tensor")
-
-        # Remove batch dimension if present
-        if image.ndim == 4:
-            if image.shape[0] != 1:
-                 print(f"Warning: Image batch size is {image.shape[0]}, using only the first image.")
-            image = image.squeeze(0) # Shape HWC
-
-        if image.ndim != 3:
-             raise ValueError(f"Unexpected image dimensions: {image.shape}. Expected HWC.")
+        if image_hwc.ndim != 3:
+            raise ValueError(f"Unexpected image dimensions: {image_hwc.shape}. Expected HWC.")
 
         # Convert float tensor (0-1) to numpy array (0-255, uint8)
-        image_np = image.cpu().numpy()
+        image_np = image_hwc.cpu().numpy()
         if image_np.dtype != np.uint8:
-             if image_np.min() < 0 or image_np.max() > 1:
-                  print("Warning: Image tensor values outside [0, 1] range. Clamping.")
-                  image_np = np.clip(image_np, 0, 1)
-             image_np = (image_np * 255).astype(np.uint8)
+            if image_np.min() < 0 or image_np.max() > 1:
+                print("Warning: Image tensor values outside [0, 1] range. Clamping.")
+                image_np = np.clip(image_np, 0, 1)
+            image_np = (image_np * 255).astype(np.uint8)
 
         # Convert numpy array to PIL Image
-        pil_image = Image.fromarray(image_np, 'RGB') # Assuming RGB, adjust if needed
+        pil_image = Image.fromarray(image_np, 'RGB')
 
         # Save PIL Image to a bytes buffer as PNG
         buffered = io.BytesIO()
@@ -564,6 +562,48 @@ class OpenRouterNode:
 
         # Encode the bytes buffer to base64 string
         return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    def images_to_base64_list(self, image):
+        """
+        Converts a ComfyUI IMAGE batch (torch.Tensor, BHWC, float 0-1)
+        into a list of base64-encoded PNG strings.
+        Handles both single images and batches.
+        Uses ThreadPoolExecutor for parallel encoding when batch size > 1.
+        """
+        if not isinstance(image, torch.Tensor):
+            raise TypeError("Input 'image' is not a torch.Tensor")
+
+        # Handle batch dimension - process ALL images
+        if image.ndim == 4:
+            batch_size = image.shape[0]
+            if batch_size > 1:
+                print(f"Processing batch of {batch_size} images in parallel")
+                # Use ThreadPoolExecutor for parallel CPU-bound encoding
+                with ThreadPoolExecutor(max_workers=min(batch_size, 8)) as executor:
+                    results = list(executor.map(
+                        self._single_image_to_base64,
+                        [image[i] for i in range(batch_size)]
+                    ))
+                return results
+            else:
+                # Single image in batch - no need for threading overhead
+                return [self._single_image_to_base64(image[0])]
+        elif image.ndim == 3:
+            # Single image without batch dimension
+            return [self._single_image_to_base64(image)]
+        else:
+            raise ValueError(f"Unexpected image dimensions: {image.shape}. Expected BHWC or HWC.")
+
+    def image_to_base64(self, image):
+        """
+        Converts a ComfyUI IMAGE (torch.Tensor, BHWC, float 0-1)
+        into a base64-encoded PNG string.
+        Legacy method - returns only the first image for backward compatibility.
+        """
+        results = self.images_to_base64_list(image)
+        if len(results) > 1:
+            print(f"Warning: Image batch size is {len(results)}, using only the first image.")
+        return results[0] if results else ""
 
     @staticmethod
     def base64_to_image(base64_str: str) -> torch.Tensor:
