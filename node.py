@@ -17,8 +17,7 @@ from .chat_manager import ChatSessionManager
 PDF_DATA_TYPE = "*" # Use '*' to accept any type, check structure later
 
 # Supported aspect ratios for Gemini-derived image generation (per OpenRouter docs)
-IMAGE_ASPECT_RATIO_CHOICES = [
-    "auto",  # rely on model default / inferred from reference
+IMAGE_ASPECT_RATIO_LIST = [
     "21:9",
     "16:9",
     "4:3",
@@ -28,8 +27,10 @@ IMAGE_ASPECT_RATIO_CHOICES = [
     "3:4",
     "9:16",
     "5:4",
-    "4:5",
+    "4:5"
 ]
+
+IMAGE_ASPECT_RATIO_CHOICES = ["auto"] + IMAGE_ASPECT_RATIO_LIST + ["calculate"]
 
 IMAGE_SIZE_CHOICES = [
     "auto",  # rely on model default
@@ -355,7 +356,15 @@ class OpenRouterNode:
             print(f"Image generation enabled by user setting")
             
             image_config = {}
-            if image_aspect_ratio != "auto" and image_aspect_ratio in IMAGE_ASPECT_RATIO_CHOICES:
+            
+            # Handle aspect ratio
+            if image_aspect_ratio == "calculate":
+                # Use image_1 if present to calculate aspect ratio
+                if kwargs.get("image_1") is not None:
+                    calculated_ratio = self._calculate_closest_aspect_ratio(kwargs["image_1"])
+                    if calculated_ratio:
+                        image_config["aspect_ratio"] = calculated_ratio
+            elif image_aspect_ratio != "auto" and image_aspect_ratio in IMAGE_ASPECT_RATIO_LIST:
                 image_config["aspect_ratio"] = image_aspect_ratio
             elif image_aspect_ratio != "auto":
                 print(f"Warning: Unsupported image aspect ratio '{image_aspect_ratio}'. Falling back to auto.")
@@ -549,6 +558,40 @@ class OpenRouterNode:
             return (error_message, placeholder_image, "Stats N/A due to error", "Credits N/A due to error")
         except Exception as e: # Catch other potential errors (e.g., JSON parsing, value errors)
              return (f"Node Error: {str(e)}", placeholder_image, "Stats N/A due to error", "Credits N/A due to error")
+
+    @staticmethod
+    def _calculate_closest_aspect_ratio(image_tensor):
+        """Calculate the closest aspect ratio from IMAGE_ASPECT_RATIO_LIST based on image dimensions."""
+        if image_tensor is None:
+            return None
+        
+        # Get dimensions from BHWC tensor
+        if image_tensor.ndim == 4:
+            height, width = image_tensor.shape[1], image_tensor.shape[2]
+        elif image_tensor.ndim == 3:
+            height, width = image_tensor.shape[0], image_tensor.shape[1]
+        else:
+            return None
+        
+        if height == 0:
+            return None
+            
+        actual_ratio = width / height
+        
+        # Find closest match from the list
+        best_match = None
+        best_diff = float('inf')
+        
+        for ratio_str in IMAGE_ASPECT_RATIO_LIST:
+            w, h = map(int, ratio_str.split(':'))
+            ratio_value = w / h
+            diff = abs(actual_ratio - ratio_value)
+            if diff < best_diff:
+                best_diff = diff
+                best_match = ratio_str
+        
+        print(f"Calculated aspect ratio: {width}x{height} -> {best_match} (actual: {actual_ratio:.3f})")
+        return best_match
 
     @staticmethod
     def _single_image_to_base64(image_hwc):
