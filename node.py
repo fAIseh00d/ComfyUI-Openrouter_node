@@ -50,6 +50,8 @@ class OpenRouterNode:
     """
 
     models_cache = None
+    models_cache_structured = None
+    models_cache_image = None
     last_fetch_time = 0
     cache_duration = 3600  # Cache duration in seconds (1 hour)
 
@@ -124,7 +126,11 @@ class OpenRouterNode:
                 models = response.json()["data"]
                 # Filter for models that support chat completions if needed, but API handles this
                 model_list = sorted([model['id'] for model in models])
+                structured_list = sorted([model['id'] for model in models if 'structured_outputs' in model['supported_parameters']])
+                image_list = sorted([model['id'] for model in models if 'image' in model['architecture']['output_modalities']])
                 cls.models_cache = model_list
+                cls.models_cache_structured = structured_list
+                cls.models_cache_image = image_list 
                 cls.last_fetch_time = current_time
             except requests.exceptions.RequestException as e:
                 print(f"Error fetching models: {e}")
@@ -351,6 +357,7 @@ class OpenRouterNode:
         
         # Only add modalities parameter if explicitly requested by user
         # This prevents "Multi-modal output is not supported" errors on text-only models
+        # if image_generation and model in self.models_cache_image: # NOTE: Not all supported models present
         if image_generation:
             data["modalities"] = ["image", "text"]
             print(f"Image generation enabled by user setting")
@@ -400,7 +407,10 @@ class OpenRouterNode:
                 }
             })
             
-        if structured_output is not None and model.startswith("openai/"):
+        if structured_output is not None and model in self.models_cache_structured:
+            data["plugins"] = [{"id": "response-healing"}]
+            data["structured_outputs"] = True
+            data["providers"] = {"require_parameters": True}
             data["response_format"] = {
                     "type": "json_schema",
                     "json_schema": {
