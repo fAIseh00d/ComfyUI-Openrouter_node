@@ -744,12 +744,12 @@ class OpenRouterNode:
     @classmethod
     def IS_CHANGED(cls, api_key, system_prompt, user_message_box, model,
                    web_search, cheapest, fastest, temperature, pdf_engine, chat_mode,
-                   image_generation=False, image_aspect_ratio="auto",
+                   image_generation=False, image_aspect_ratio="auto", image_size="auto",
                    pdf_data=None, user_message_input=None,
                    max_tokens=0, top_p=1.0, reasoning=False, structured_output=None, **kwargs):
         """
         Check if any input that affects the output has changed.
-        Includes hashing image and PDF data.
+        Includes hashing image, PDF, and other complex data.
         """
         # Hash image data if present - handle multiple images from kwargs
         image_hashes = []
@@ -788,6 +788,19 @@ class OpenRouterNode:
              pdf_hash = "invalid_pdf_data_format"
 
 
+        # Hash structured_output JSON string
+        structured_hash = None
+        if structured_output is not None:
+            try:
+                # structured_output is a JSON string, hash it directly
+                hasher = hashlib.sha256()
+                hasher.update(str(structured_output).encode('utf-8'))
+                structured_hash = hasher.hexdigest()
+            except Exception as e:
+                print(f"Warning: Could not hash structured_output for IS_CHANGED: {e}")
+                structured_hash = "structured_hashing_error"
+
+
         # Ensure temperature is consistently represented (e.g., as float)
         try:
             temp_float = float(temperature) if isinstance(temperature, (str, int, float)) else 1.0
@@ -800,9 +813,9 @@ class OpenRouterNode:
         # Use primitive types where possible for reliable hashing/comparison
         return (api_key, system_prompt, user_message_box, model,
                 web_search, cheapest, fastest, temp_float, pdf_engine, chat_mode,
-                image_generation, image_aspect_ratio,
+                image_generation, image_aspect_ratio, image_size,
                 tuple(image_hashes), pdf_hash, user_message_input,
-                max_tokens, top_p, reasoning, structured_output)
+                max_tokens, top_p, reasoning, structured_hash)
 
 # Node class mappings
 NODE_CLASS_MAPPINGS = {
